@@ -45,11 +45,6 @@
 
 Syncthing 启动后，你可以在手机上的浏览器中打开 `http://127.0.0.1:8384` 来访问其 Web 管理界面。
 
-如果你想在电脑上访问，可以使用 ADB 工具进行端口转发：
-```bash
-adb forward tcp:8384 tcp:8384
-```
-然后在电脑浏览器中访问 `http://127.0.0.1:8384`。
 
 #### 如何选择运行模式（重要！）
 
@@ -118,12 +113,6 @@ The core functionality of this module was written by AI, aiming to provide a sim
 #### Accessing the Syncthing Web UI
 
 Once Syncthing is running, you can access its web management interface by opening `http://127.0.0.1:8384` in a browser on your phone.
-
-If you want to access it from your computer, you can use ADB to forward the port:
-```bash
-adb forward tcp:8384 tcp:8384
-```
-Then, open `http://127.0.0.1:8384` in your computer's browser.
 
 #### How to Choose an Operational Mode (Important!)
 
