@@ -13,6 +13,7 @@ SYNCTHING_HOME="$MODDIR/config"
 CONFIG_FILE="$MODDIR/mode.conf"
 LOG_FILE="$SYNCTHING_HOME/syncthing.log"
 
+
 # --- Start logging to the file from here ---
 # This will redirect all stdout and stderr of the script to the log file.
 # The 'exec' command replaces the current shell process, saving resources.
@@ -52,9 +53,11 @@ SYNCTHING_ARGS="-no-browser -home=$SYNCTHING_HOME -logfile=- -no-restart"
 if [ "$RUN_MODE" = "root" ]; then
   echo "Executing Syncthing as root..."
   # 'exec' will replace the shell process with the syncthing process
-  exec $SYNCTHING_BIN $SYNCTHING_ARGS
+  # 关键修改：在执行命令前，设置 HOME 环境变量
+  exec env HOME=$SYNCTHING_HOME $SYNCTHING_BIN $SYNCTHING_ARGS
 else
   echo "Executing Syncthing as user 'shell'..."
   # 'exec' will replace the 'su' subshell process
-  exec su -c "$SYNCTHING_BIN $SYNCTHING_ARGS" shell
+  # 关键修改：在 su -c 的命令字符串内部设置 HOME 环境变量，保证其在正确的上下文中生效
+  exec su -c "HOME=$SYNCTHING_HOME $SYNCTHING_BIN $SYNCTHING_ARGS" shell
 fi
