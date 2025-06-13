@@ -1,0 +1,6 @@
+id=syncthing-for-magisk
+name=Syncthing for Magisk
+version=v1.29.7
+versionCode=12907
+author=ywpc05&Gemini&Claude
+description=Run Syncthing as a persistent root service at boot.
