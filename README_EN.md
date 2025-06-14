@@ -10,15 +10,12 @@ The core functionality of this module was written by AI. Please use it at your o
 
 -   **Autostart on Boot**: The Syncthing service starts automatically after your device boots up.
 -   **Persistent Service**: Runs as a system service, making it less likely to be killed by the system's memory management.
--   **Two Operating Modes**:
-    -   **User Mode**: Safer, with access limited to internal storage (`/sdcard`).
-    -   **Root Mode**: Higher privileges, with access to the entire filesystem, including system partitions.
 -   **Automated Setup**: The installation script defaults to the safer "User Mode" unless you specify otherwise.
 -   **Logging**: Runtime logs are saved within the module directory for easy troubleshooting.
 
 ## Installation
 
-1.  Download the latest module `zip` 文件。
+1.  Download the latest module `zip` file。
 2.  Open the Magisk app.
 3.  Go to `Modules` -> `Install from storage`.
 4.  Select the `zip` file you downloaded.
@@ -30,19 +27,6 @@ The core functionality of this module was written by AI. Please use it at your o
 ### Accessing the Syncthing Web UI
 
 Once Syncthing is running, you can access its web management interface by opening `http://127.0.0.1:8384` in a browser on your phone.
-
-### How to Choose the Operating Mode
-
-The module installs in **User Mode** by default, which is the safest option. If you need to sync system files (e.g., app data from the `/data/data/` directory), you will need **Root Mode**。
-
-**You must choose the mode *before* installing the module**. Here's how:
-
--   **Method 1 (Recommended)**: Create a file named `syncthing_mode.txt` in the root of your internal storage (`/sdcard`).
-    -   To use **Root Mode**, write `root` inside the file.
-    -   To use **User Mode**, write `user` inside the file.
--   **Method 2 (Post-Install Change)**: After installation, you can inspect the chosen mode by viewing the `/data/adb/modules/syncthing-for-magisk/config/mode.conf` 文件。
-
-If you do not create the `syncthing_mode.txt` file, the module will always install in **User Mode**. If you want to switch from User Mode to Root Mode (or vice-versa), you must first create or edit the `syncthing_mode.txt` file as described above, 和 then **reinstall the module in Magisk**。
 
 ### Key File Paths
 
