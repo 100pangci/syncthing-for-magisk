@@ -3,4 +3,4 @@ name=Syncthing for Magisk
 version=v1.29.7
 versionCode=12907
 author=ywpc05&Gemini&Claude
-description=Run Syncthing as a persistent user&root service at boot.
+description=Runs Syncthing as a persistent service at boot (as user 'shell'). Accesses /sdcard and external storage.
