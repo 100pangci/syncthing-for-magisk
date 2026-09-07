@@ -1,38 +1,72 @@
 #!/system/bin/sh
-# This script will be executed when you tap the button in Magisk Manager
+# This script will be executed when you tap the Action button in Magisk Manager
 
-# --- Basic Setup ---
 MODDIR=${MODDIR:-/data/adb/modules/syncthing-for-magisk}
-
-# Define paths
-SYNCTHING_BIN="$MODDIR/system/bin/syncthing"
-SYNCTHING_HOME="$MODDIR/config"
+DATA_DIR=/data/adb/syncthing-for-magisk
+SYNCTHING_BIN="$MODDIR/bin/syncthing"
+SYNCTHING_HOME="$DATA_DIR/config"
 LOG_FILE="$SYNCTHING_HOME/syncthing.log"
+STOP_FLAG="$DATA_DIR/syncthing.stop"
 
-# --- Core Toggle Logic ---
+# Make sure the 'shell' user can reach the binary and the config directory
+chmod 0711 /data/adb /data/adb/modules 2>/dev/null
+chmod 0711 "$MODDIR" "$MODDIR/bin" "$DATA_DIR" 2>/dev/null
+chmod 0755 "$SYNCTHING_BIN" 2>/dev/null
+mkdir -p "$SYNCTHING_HOME"
+chown 2000:2000 "$SYNCTHING_HOME" 2>/dev/null
+chmod 0770 "$SYNCTHING_HOME" 2>/dev/null
 
-# Check if the syncthing process is running
-if ps -A | grep -q '[s]yncthing'; then
+# Only match processes launched from OUR binary, so an instance of the
+# Syncthing Android app is never killed by mistake
+our_pids() {
+  for pid in $(pidof syncthing 2>/dev/null); do
+    [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$SYNCTHING_BIN" ] && echo "$pid"
+  done
+}
+
+PIDS=$(our_pids)
+
+if [ -n "$PIDS" ]; then
   # --- STOP SYNCTHING ---
-  echo "Syncthing is running. Stopping it..."
-  killall syncthing
-  sleep 1 # Give it a moment to terminate
-  echo "Syncthing stopped."
+  echo "Syncthing is running (pid:$PIDS). Stopping it..."
+  # Set the flag first so the service.sh supervisor loop does not respawn
+  touch "$STOP_FLAG"
+  kill $PIDS 2>/dev/null
+  i=0
+  while [ -n "$(our_pids)" ] && [ "$i" -lt 10 ]; do
+    sleep 1
+    i=$((i + 1))
+  done
+  if [ -n "$(our_pids)" ]; then
+    kill -9 $PIDS 2>/dev/null
+    echo "Syncthing force killed."
+  else
+    echo "Syncthing stopped."
+  fi
 else
   # --- START SYNCTHING ---
-  echo "Syncthing is not running. Starting it..."
-  echo "Starting in User (shell) mode."
+  echo "Syncthing is not running. Starting it as user 'shell'..."
+  rm -f "$STOP_FLAG"
 
-  # Prepare command arguments
-  # We explicitly set -logfile to the file for clean output in Magisk Manager.
-  SYNCTHING_ARGS="-no-browser -home=$SYNCTHING_HOME -logfile=$LOG_FILE -no-restart"
+  # First run: generate a fresh unique configuration
+  if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
+    echo "No config found. Generating a fresh configuration..."
+    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell
+  fi
 
-  # Execute Syncthing as user 'shell' in the background
-  echo "Executing Syncthing as user 'shell' in the background..."
-  su -c "HOME=$SYNCTHING_HOME STDNSRESOLVER=8.8.8.8:53 $SYNCTHING_BIN $SYNCTHING_ARGS" shell &
+  touch "$LOG_FILE"
+  chown 2000:2000 "$LOG_FILE" 2>/dev/null
+  chmod 0660 "$LOG_FILE" 2>/dev/null
 
-  sleep 1 # Give it a moment to start
-  echo "Syncthing start command issued."
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' -no-browser -home='$SYNCTHING_HOME' -logfile='$LOG_FILE'" shell &
+
+  sleep 2
+  PIDS=$(our_pids)
+  if [ -n "$PIDS" ]; then
+    echo "Syncthing started (pid:$PIDS). WebUI: http://127.0.0.1:8384"
+  else
+    echo "Syncthing failed to start. Check $LOG_FILE"
+  fi
 fi
 
 echo "Action complete."

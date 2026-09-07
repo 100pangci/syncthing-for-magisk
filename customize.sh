@@ -1,59 +1,60 @@
 #!/system/bin/sh
-# Do not touch this line
 # This script will be executed in recovery mode during module installation
-
-# Load utility functions for UI - NO LONGER NEEDED
-# . $MODPATH/util_functions.sh
 
 ui_print " "
 ui_print "Syncthing for Magisk Installer"
 ui_print " "
 ui_print "- This module will run Syncthing as the 'shell' user."
 ui_print "- It can only access internal storage (/sdcard) and SD cards."
-ui_print "- This is the standard and most secure configuration."
 ui_print " "
 
-# Create config directory and set permissions for User Mode
-ui_print "- Configuring for User (shell) Mode..."
-CONFIG_DIR="$MODPATH/config"
+MODID=syncthing-for-magisk
+DATA_DIR=/data/adb/syncthing-for-magisk
+CONFIG_DIR="$DATA_DIR/config"
+
+# Syncthing's identity (keys, config, database) lives OUTSIDE the module
+# directory, because Magisk wipes the module directory on every update.
 mkdir -p "$CONFIG_DIR"
-set_perm_recursive "$CONFIG_DIR" 2000 2000 0755 0644
-ui_print "- Config directory permissions set for user 'shell' (UID 2000)."
 
-# Copy default config if it doesn't exist
-ui_print "- Checking for existing configuration..."
-# The default config.xml should be placed in the module zip, not in system/etc
-# For example, place it in $MODPATH/config.xml.template
-if [ -f "$MODPATH/system/etc/config.xml" ]; then
-  if [ ! -f "$CONFIG_DIR/config.xml" ]; then
-    cp "$MODPATH/system/etc/config.xml" "$CONFIG_DIR/config.xml"
-    ui_print "- No existing config found. Deployed default config."
-    # Ensure the new config file has the correct permissions
-    chown 2000:2000 "$CONFIG_DIR/config.xml"
-    chmod 0644 "$CONFIG_DIR/config.xml"
-  else
-    ui_print "- Existing config.xml found. No changes made."
-  fi
-else
-  ui_print "! Warning: Default config template not found in module."
+# Migrate config from the old location (inside the module directory)
+OLD_CONFIG_DIR="/data/adb/modules/$MODID/config"
+if [ -f "$OLD_CONFIG_DIR/config.xml" ] && [ ! -f "$CONFIG_DIR/config.xml" ]; then
+  ui_print "- Migrating existing config from module directory..."
+  cp -a "$OLD_CONFIG_DIR/." "$CONFIG_DIR/" 2>/dev/null
+  ui_print "- Migration done."
 fi
 
-# Set permissions for Syncthing binary
+# Older versions shipped a config containing a fixed API key and a leftover
+# remote device entry. Strip both; the device ID and pairings are preserved,
+# and users of very old versions get a fresh random API key.
+if [ -f "$CONFIG_DIR/config.xml" ] && grep -q "HDCR34R" "$CONFIG_DIR/config.xml"; then
+  ui_print "- Removing leftover default device entry and fixed API key..."
+  sed -i '\#<device id="HDCR34R.*</device>#d' "$CONFIG_DIR/config.xml"
+  sed -i '\#^    <device id="HDCR34R#,\#^    </device>#d' "$CONFIG_DIR/config.xml"
+  NEW_API_KEY=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+  sed -i "s#<apikey>default</apikey>#<apikey>$NEW_API_KEY</apikey>#" "$CONFIG_DIR/config.xml"
+fi
+
+set_perm_recursive "$CONFIG_DIR" 2000 2000 0770 0660
+ui_print "- Config directory: $CONFIG_DIR"
+
+# /data/adb is 0700 root, which would block uid 2000 from traversing it.
+# 0711 allows traversal without listing. service.sh reapplies this each boot.
+chmod 0711 /data/adb /data/adb/modules "$DATA_DIR" 2>/dev/null
+
+# Set permissions for Syncthing binary (kept outside system/ so it does not
+# get mounted into the real /system)
 ui_print "- Setting permissions for Syncthing binary..."
-if [ -f "$MODPATH/system/bin/syncthing" ]; then
-  set_perm "$MODPATH/system/bin/syncthing" 0 0 0755
-  ui_print "- Binary permissions set successfully."
+if [ -f "$MODPATH/bin/syncthing" ]; then
+  set_perm "$MODPATH/bin/syncthing" 0 0 0755
+  chmod 0711 "$MODPATH" "$MODPATH/bin"
 else
-  ui_print "! Warning: Syncthing binary not found at $MODPATH/system/bin/syncthing"
-  abort "! Aborting installation."
+  abort "! Syncthing binary not found at $MODPATH/bin/syncthing"
 fi
-
-# Create installation log
-echo "Installation completed at $(date)" > "$MODPATH/install.log"
-echo "Mode: User (shell) only" >> "$MODPATH/install.log"
-echo "Config directory: $CONFIG_DIR" >> "$MODPATH/install.log"
 
 ui_print " "
 ui_print "Installation complete!"
 ui_print " "
-ui_print "Syncthing will start automatically as user 'shell' after reboot."
+ui_print "- On first start a unique configuration is generated automatically."
+ui_print "- WebUI: http://127.0.0.1:8384 (set a GUI password after first start!)"
+ui_print "- Syncthing will start automatically as user 'shell' after reboot."
