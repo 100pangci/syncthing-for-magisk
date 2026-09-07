@@ -22,13 +22,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Resolve Syncthing version
+      - name: Resolve Syncthing version and release channel
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED: ${{ inputs.syncthing_version }}
         run: |
-          # Priority: manual input > git tag (exact match) > latest stable release
+          # Kernel version priority: manual input > git tag (exact match) > latest stable release
           if [ -z "$REQUESTED" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             REQUESTED="${GITHUB_REF_NAME}"
           fi
@@ -39,19 +39,43 @@ jobs:
             TAG=$(gh release view --repo "$SYNCTHING_REPO" --json tagName -q .tagName)
             SOURCE="latest stable release"
           fi
+
+          # The module version always has four components: kernel version plus a
+          # module build number, e.g. syncthing v2.1.3 -> module v2.1.3.0
           VERSION="${TAG#v}"
-          VERSION_CODE=$(awk -F. -v v="$VERSION" 'BEGIN{split(v,a,"."); printf "%d", a[1]*10000 + a[2]*100 + a[3]}')
+          while [ "$(awk -F. '{print NF}' <<< "$VERSION")" -lt 4 ]; do
+            VERSION="${VERSION}.0"
+          done
+          VERSION_CODE=$(awk -F. -v v="$VERSION" 'BEGIN{split(v,a,"."); printf "%d", a[1]*1000000 + a[2]*10000 + a[3]*100 + a[4]}')
           {
-            echo "tag=$TAG"
+            echo "kernel_tag=$TAG"
             echo "version=$VERSION"
             echo "version_code=$VERSION_CODE"
             echo "zip_name=Syncthing-for-Magisk-v${VERSION}.zip"
           } >> "$GITHUB_OUTPUT"
-          echo "Packaging Syncthing ${TAG} (${SOURCE})"
+          echo "Packaging Syncthing ${TAG} as module v${VERSION} (${SOURCE})"
+
+          # Release channels: v* tags -> stable release; main -> pre-release test
+          # build; everything else -> artifact only
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            {
+              echo "release_tag=${GITHUB_REF_NAME}"
+              echo "prerelease=false"
+              echo "do_release=true"
+            } >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            {
+              echo "release_tag=v${VERSION}-pre.${GITHUB_RUN_NUMBER}"
+              echo "prerelease=true"
+              echo "do_release=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "do_release=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Download Syncthing binary
         env:
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ steps.version.outputs.kernel_tag }}
         run: |
           TARBALL="syncthing-linux-arm64-${TAG}.tar.gz"
           URL="https://github.com/${SYNCTHING_REPO}/releases/download/${TAG}/${TARBALL}"
@@ -105,9 +129,11 @@ jobs:
           if-no-files-found: error
 
       - name: Attach to GitHub Release
-        if: github.ref_type == 'tag'
+        if: steps.version.outputs.do_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
           files: |
             ${{ steps.version.outputs.zip_name }}
             ${{ steps.version.outputs.zip_name }}.sha256

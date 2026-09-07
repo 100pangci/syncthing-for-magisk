@@ -17,11 +17,11 @@ The core functionality of this module was written by AI. Please use it at your o
 
 ## Downloads
 
-- **Development builds**: GitHub Actions automatically builds the module zip on every push. Grab the Artifacts of a run from the [Actions](../../actions) page.
-- **Stable releases**: Pushing a `v*` tag (e.g. `v2.1.3`) automatically creates a [Release](../../releases) with the module zip and its sha256 checksum.
-- **Pinned version**: When triggering a build manually from the Actions page, you can enter a specific Syncthing version (e.g. `v1.29.7`); leave it empty to use the latest stable release.
+- **Test builds (pre-releases)**: Every push/merge to the `main` branch is automatically built and published as a pre-release on the [Releases](../../releases) page, tagged `vx.y.z.0-pre.<build number>`.
+- **Stable releases**: Pushing a `v*` tag creates a stable Release with the module zip and its sha256 checksum.
+- **Manual builds**: Trigger manually from the [Actions](../../actions) page, optionally pinning a Syncthing version (e.g. `v1.29.7`); leave empty for the latest stable release. Manual runs on `main` are also published as pre-releases.
 
-The module version inside the zip is automatically synced to the packaged Syncthing version. When upgrading from older builds (Syncthing v1.x), Syncthing v2 migrates the configuration and database automatically; the first start may rescan sync folders once.
+The module version always has four components: the first three follow the packaged Syncthing kernel, the fourth is the module's own build number (e.g. kernel v2.1.3 -> module v2.1.3.0). The version inside the zip is automatically synced to the packaged kernel. When upgrading from older builds (Syncthing v1.x), Syncthing v2 migrates the configuration and database automatically; the first start may rescan sync folders once.
 
 ## Installation
 

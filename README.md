@@ -17,11 +17,11 @@
 
 ## 下载
 
-- **开发版**: 每次推送后 GitHub Actions 会自动构建模块 zip，可在 [Actions](../../actions) 页面下载对应构建的 Artifacts。
-- **正式版**: 推送 `v*` 格式的标签（如 `v2.1.3`）会自动创建 [Release](../../releases)，并附带模块 zip 与 sha256 校验文件。
-- **指定版本**: 在 Actions 页面手动触发构建时，可以填入指定的 Syncthing 版本（如 `v1.29.7`）；留空则使用最新稳定版。
+- **测试版（pre-release）**: 每次推送/合并到 `main` 分支，GitHub Actions 会自动构建并发布为 pre-release，可在 [Releases](../../releases) 页面获取，标签格式为 `vx.y.z.0-pre.构建号`。
+- **正式版**: 推送 `v*` 格式的标签会自动创建正式 Release，并附带模块 zip 与 sha256 校验文件。
+- **手动构建**: 在 [Actions](../../actions) 页面手动触发，可指定 Syncthing 版本（如 `v1.29.7`）；留空则使用最新稳定版。在 `main` 上触发同样会发布 pre-release。
 
-zip 内的模块版本号会自动同步为实际打包的 Syncthing 版本。从旧版本（Syncthing v1.x）升级时，Syncthing v2 会自动迁移配置和数据库，首次启动可能需要重新扫描一遍同步文件夹。
+模块版本号固定为四段：前三段跟随所打包的 Syncthing 内核版本，第四位是模块自身的修订号（例如内核 v2.1.3 → 模块 v2.1.3.0）。zip 内的模块版本号会自动同步为实际打包的内核版本。从旧版本（Syncthing v1.x）升级时，Syncthing v2 会自动迁移配置和数据库，首次启动可能需要重新扫描一遍同步文件夹。
 
 ## 如何安装
 
