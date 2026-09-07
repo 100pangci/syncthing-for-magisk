@@ -14,6 +14,11 @@
 - **Action 开关**: 在 Magisk Manager 中点按 Action 按钮即可启动/停止 Syncthing。
 - **日志记录**: 运行日志被保存在数据目录中（超过 1 MB 自动截断），方便排查问题。
 
+## 下载
+
+- **开发版**: 每次推送后 GitHub Actions 会自动构建模块 zip，可在 [Actions](../../actions) 页面下载对应构建的 Artifacts。
+- **正式版**: 推送 `v*` 格式的标签（如 `v1.29.7`）会自动创建 [Release](../../releases)，并附带模块 zip 与 sha256 校验文件。
+
 ## 如何安装
 
 1.  下载最新的 `zip` 格式模块文件。

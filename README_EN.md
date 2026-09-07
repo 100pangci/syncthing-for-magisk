@@ -14,6 +14,11 @@ The core functionality of this module was written by AI. Please use it at your o
 - **Action Button**: Start/stop Syncthing by tapping the Action button in the Magisk Manager.
 - **Logging**: Runtime logs are saved in the data directory (truncated automatically beyond 1 MB) for easy troubleshooting.
 
+## Downloads
+
+- **Development builds**: GitHub Actions automatically builds the module zip on every push. Grab the Artifacts of a run from the [Actions](../../actions) page.
+- **Stable releases**: Pushing a `v*` tag (e.g. `v1.29.7`) automatically creates a [Release](../../releases) with the module zip and its sha256 checksum.
+
 ## Installation
 
 1.  Download the latest module `zip` file.

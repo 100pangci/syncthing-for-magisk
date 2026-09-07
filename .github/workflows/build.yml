@@ -1,0 +1,64 @@
+name: Build Magisk Module
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read module info
+        id: info
+        run: |
+          VERSION=$(grep '^version=' module.prop | cut -d= -f2)
+          VERSION_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          ZIP_NAME="Syncthing-for-Magisk-${VERSION}.zip"
+          echo "version=$VERSION"           >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME"         >> "$GITHUB_OUTPUT"
+
+      - name: Syntax check scripts
+        run: |
+          for f in customize.sh service.sh action.sh META-INF/com/google/android/update-binary; do
+            sh -n "$f"
+          done
+
+      - name: Pack module zip
+        run: |
+          test -x bin/syncthing || { echo "bin/syncthing is missing"; exit 1; }
+          ZIP_NAME="${{ steps.info.outputs.zip_name }}"
+          zip -r9 "$ZIP_NAME" \
+            META-INF \
+            module.prop \
+            customize.sh \
+            service.sh \
+            action.sh \
+            bin \
+            system
+          sha256sum "$ZIP_NAME" > "$ZIP_NAME.sha256"
+          unzip -l "$ZIP_NAME"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.info.outputs.zip_name }}
+          path: |
+            ${{ steps.info.outputs.zip_name }}
+            ${{ steps.info.outputs.zip_name }}.sha256
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.info.outputs.zip_name }}
+            ${{ steps.info.outputs.zip_name }}.sha256
+          generate_release_notes: true
