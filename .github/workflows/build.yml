@@ -3,9 +3,17 @@ name: Build Magisk Module
 on:
   push:
   workflow_dispatch:
+    inputs:
+      syncthing_version:
+        description: 'Syncthing version to package (e.g. v1.29.7). Leave empty for the latest stable release.'
+        required: false
+        type: string
 
 permissions:
   contents: write
+
+env:
+  SYNCTHING_REPO: syncthing/syncthing
 
 jobs:
   build:
@@ -14,15 +22,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read module info
-        id: info
+      - name: Resolve Syncthing version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.syncthing_version }}
         run: |
-          VERSION=$(grep '^version=' module.prop | cut -d= -f2)
-          VERSION_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
-          ZIP_NAME="Syncthing-for-Magisk-${VERSION}.zip"
-          echo "version=$VERSION"           >> "$GITHUB_OUTPUT"
-          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "zip_name=$ZIP_NAME"         >> "$GITHUB_OUTPUT"
+          # Priority: manual input > git tag (exact match) > latest stable release
+          if [ -z "$REQUESTED" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            REQUESTED="${GITHUB_REF_NAME}"
+          fi
+          if [ -n "$REQUESTED" ]; then
+            TAG="$REQUESTED"
+            SOURCE="requested (${REQUESTED})"
+          else
+            TAG=$(gh release view --repo "$SYNCTHING_REPO" --json tagName -q .tagName)
+            SOURCE="latest stable release"
+          fi
+          VERSION="${TAG#v}"
+          VERSION_CODE=$(awk -F. -v v="$VERSION" 'BEGIN{split(v,a,"."); printf "%d", a[1]*10000 + a[2]*100 + a[3]}')
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "version_code=$VERSION_CODE"
+            echo "zip_name=Syncthing-for-Magisk-v${VERSION}.zip"
+          } >> "$GITHUB_OUTPUT"
+          echo "Packaging Syncthing ${TAG} (${SOURCE})"
+
+      - name: Download Syncthing binary
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          TARBALL="syncthing-linux-arm64-${TAG}.tar.gz"
+          URL="https://github.com/${SYNCTHING_REPO}/releases/download/${TAG}/${TARBALL}"
+          echo "Downloading ${URL}"
+          curl -fsSL --retry 3 -o "$TARBALL" "$URL"
+          tar -xzf "$TARBALL"
+          mv "syncthing-linux-arm64-${TAG}/syncthing" bin/syncthing
+          chmod 0755 bin/syncthing
+          rm -rf "syncthing-linux-arm64-${TAG}" "$TARBALL"
+          file bin/syncthing
+          file bin/syncthing | grep -q 'ARM aarch64' || { echo "Not an aarch64 binary"; exit 1; }
+
+      - name: Sync module.prop with packaged version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+        run: |
+          sed -i "s/^version=.*/version=v${VERSION}/" module.prop
+          sed -i "s/^versionCode=.*/versionCode=${VERSION_CODE}/" module.prop
+          grep -E '^(version|versionCode)=' module.prop
 
       - name: Syntax check scripts
         run: |
@@ -31,9 +80,10 @@ jobs:
           done
 
       - name: Pack module zip
+        env:
+          ZIP_NAME: ${{ steps.version.outputs.zip_name }}
         run: |
           test -x bin/syncthing || { echo "bin/syncthing is missing"; exit 1; }
-          ZIP_NAME="${{ steps.info.outputs.zip_name }}"
           zip -r9 "$ZIP_NAME" \
             META-INF \
             module.prop \
@@ -48,17 +98,17 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.info.outputs.zip_name }}
+          name: ${{ steps.version.outputs.zip_name }}
           path: |
-            ${{ steps.info.outputs.zip_name }}
-            ${{ steps.info.outputs.zip_name }}.sha256
+            ${{ steps.version.outputs.zip_name }}
+            ${{ steps.version.outputs.zip_name }}.sha256
           if-no-files-found: error
 
       - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.info.outputs.zip_name }}
-            ${{ steps.info.outputs.zip_name }}.sha256
+            ${{ steps.version.outputs.zip_name }}
+            ${{ steps.version.outputs.zip_name }}.sha256
           generate_release_notes: true

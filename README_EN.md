@@ -10,6 +10,7 @@ The core functionality of this module was written by AI. Please use it at your o
 
 - **Autostart on Boot**: The Syncthing service starts automatically after your device boots up.
 - **Crash Recovery**: A supervisor loop restarts Syncthing automatically if it exits unexpectedly (unless you stopped it via the Action button).
+- **Tracks the Latest Kernel**: GitHub Actions downloads the latest stable Syncthing (linux-arm64) at build time and packages it into the zip; the binary is not stored in the repository, and the module version automatically matches the packaged kernel.
 - **Unique Identity**: On first start, a unique device ID, certificates and API key are generated for your installation. No configuration is shipped inside the module.
 - **Action Button**: Start/stop Syncthing by tapping the Action button in the Magisk Manager.
 - **Logging**: Runtime logs are saved in the data directory (truncated automatically beyond 1 MB) for easy troubleshooting.
@@ -17,7 +18,10 @@ The core functionality of this module was written by AI. Please use it at your o
 ## Downloads
 
 - **Development builds**: GitHub Actions automatically builds the module zip on every push. Grab the Artifacts of a run from the [Actions](../../actions) page.
-- **Stable releases**: Pushing a `v*` tag (e.g. `v1.29.7`) automatically creates a [Release](../../releases) with the module zip and its sha256 checksum.
+- **Stable releases**: Pushing a `v*` tag (e.g. `v2.1.3`) automatically creates a [Release](../../releases) with the module zip and its sha256 checksum.
+- **Pinned version**: When triggering a build manually from the Actions page, you can enter a specific Syncthing version (e.g. `v1.29.7`); leave it empty to use the latest stable release.
+
+The module version inside the zip is automatically synced to the packaged Syncthing version. When upgrading from older builds (Syncthing v1.x), Syncthing v2 migrates the configuration and database automatically; the first start may rescan sync folders once.
 
 ## Installation
 

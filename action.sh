@@ -49,16 +49,21 @@ else
   rm -f "$STOP_FLAG"
 
   # First run: generate a fresh unique configuration
+  # Syncthing v1 accepts --no-default-folder, v2 removed that flag
   if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
     echo "No config found. Generating a fresh configuration..."
-    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell
+    if ! su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell; then
+      echo "Retrying generate without v1-only flags (Syncthing v2)..."
+      su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
+    fi
   fi
 
   touch "$LOG_FILE"
   chown 2000:2000 "$LOG_FILE" 2>/dev/null
   chmod 0660 "$LOG_FILE" 2>/dev/null
 
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' -no-browser -home='$SYNCTHING_HOME' -logfile='$LOG_FILE'" shell &
+  # 'serve' works on both v1 (kong CLI) and v2
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve -no-browser -home='$SYNCTHING_HOME' -logfile='$LOG_FILE'" shell &
 
   sleep 2
   PIDS=$(our_pids)

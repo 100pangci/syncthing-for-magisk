@@ -49,9 +49,13 @@ rm -f "$STOP_FLAG"
 
 # First run: generate a unique configuration (device ID, certificates and API
 # key) for this installation. Nothing personal is shipped inside the module.
+# Syncthing v1 accepts --no-default-folder, v2 removed that flag.
 if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
   echo "No config found. Generating a fresh configuration as user 'shell'..."
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell
+  if ! su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell; then
+    echo "Retrying generate without v1-only flags (Syncthing v2)..."
+    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
+  fi
   echo "Config generation exit status: $?"
 fi
 
@@ -81,8 +85,9 @@ while :; do
     continue
   fi
   echo "Starting Syncthing as user 'shell' at $(date)"
-  # -logfile=- sends Syncthing's own log to stdout, already redirected above
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' -no-browser -home='$SYNCTHING_HOME' -logfile=-" shell
+  # 'serve' works on both v1 (kong CLI) and v2; -logfile=- sends Syncthing's
+  # own log to stdout, already redirected above
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve -no-browser -home='$SYNCTHING_HOME' -logfile=-" shell
   echo "Syncthing exited with status $? at $(date)"
   sleep 5
 done
