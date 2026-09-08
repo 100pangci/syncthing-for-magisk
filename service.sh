@@ -2,23 +2,40 @@
 # This script will be executed in late_start service mode
 
 MODDIR=${MODDIR:-${0%/*}}
-DATA_DIR=/data/adb/syncthing-for-magisk
+DATA_DIR=/data/local/syncthing-for-magisk
 SYNCTHING_BIN="$MODDIR/bin/syncthing"
 SYNCTHING_HOME="$DATA_DIR/config"
 LOG_FILE="$SYNCTHING_HOME/syncthing.log"
 STOP_FLAG="$DATA_DIR/syncthing.stop"
 
 # --- Permissions ---
-# Magisk keeps /data/adb at 0700 root, which would prevent the unprivileged
-# 'shell' user (uid 2000) from reaching anything inside it. 0711 grants
-# traversal without listing; the config directory itself stays 0770.
-chmod 0711 /data/adb /data/adb/modules 2>/dev/null
+# This script (like action.sh and customize.sh) is already executed as root,
+# so no su is needed. We only drop privileges to the unprivileged 'shell'
+# user (uid 2000) with setpriv so Syncthing sees nothing but /sdcard and SD
+# cards. toybox setpriv exists on Android 8+; on older devices we fall back
+# to root (the config directory is shell-owned in every case).
+# The data directory lives under /data/local, which the shell user can
+# traverse natively -- unlike /data/adb, which is root-only by design and
+# must NOT be weakened just for this module.
+chmod 0711 /data/local 2>/dev/null
 chmod 0711 "$MODDIR" "$MODDIR/bin" "$DATA_DIR" 2>/dev/null
 chmod 0755 "$SYNCTHING_BIN" 2>/dev/null
 
 mkdir -p "$SYNCTHING_HOME"
 chown 2000:2000 "$SYNCTHING_HOME"
 chmod 0770 "$SYNCTHING_HOME"
+# Legacy installs may contain root-owned files from older versions
+chown -R 2000:2000 "$SYNCTHING_HOME" 2>/dev/null
+
+# Run a command as the 'shell' user (uid 2000) where possible
+run_as_shell() {
+  if [ -x /system/bin/setpriv ]; then
+    /system/bin/setpriv --reuid 2000 --regid 2000 --clear-groups "$@"
+  else
+    echo "WARNING: setpriv not found; running as root instead of uid 2000"
+    "$@"
+  fi
+}
 
 # Rotate the log if it grew beyond 1 MB, keeping the last 256 KB
 if [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt 1048576 ]; then
@@ -36,9 +53,12 @@ echo "Syncthing service starting at $(date)"
 echo "Module directory: $MODDIR"
 echo "Config directory: $SYNCTHING_HOME"
 
-# Wait until the boot process is complete
-while [ "$(getprop sys.boot_completed)" != "1" ]; do
+# Wait until the boot process is complete (bounded, in case the property
+# never fires on an unusual device)
+i=0
+while [ "$(getprop sys.boot_completed)" != "1" ] && [ "$i" -lt 180 ]; do
   sleep 1
+  i=$((i + 1))
 done
 
 # Give it a bit more time for network to be up
@@ -52,7 +72,7 @@ rm -f "$STOP_FLAG"
 # Syncthing v2's generate subcommand creates the identity and initial config.
 if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
   echo "No config found. Generating a fresh configuration as user 'shell'..."
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
+  run_as_shell env HOME="$SYNCTHING_HOME" "$SYNCTHING_BIN" generate --home="$SYNCTHING_HOME"
   echo "Config generation exit status: $?"
 fi
 
@@ -66,19 +86,21 @@ our_pids() {
 }
 
 # Supervisor loop: keep Syncthing alive across crashes. Stopping is done via
-# the Action button, which sets the stop flag that pauses this loop.
+# the Action button, which sets the stop flag that pauses this loop. Starting
+# also goes through this loop (the Action button only clears the flag), so
+# Syncthing is never launched twice.
 while :; do
   if [ ! -x "$SYNCTHING_BIN" ]; then
     echo "Binary missing, supervisor exiting at $(date)"
     break
   fi
   if [ -f "$STOP_FLAG" ]; then
-    sleep 10
+    sleep 5
     continue
   fi
   if [ -n "$(our_pids)" ]; then
-    # Started manually via the Action button; do not double-start
-    sleep 10
+    # Already running (e.g. started before this loop came up); do not double-start
+    sleep 5
     continue
   fi
   echo "Starting Syncthing as user 'shell' at $(date)"
@@ -86,7 +108,7 @@ while :; do
   # stdout, which is already redirected to the module log above. The service
   # supervisor owns retries, so --no-restart makes Syncthing's monitor return
   # after a child failure instead of retrying internally.
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve --no-browser --no-restart --no-upgrade --home='$SYNCTHING_HOME' --log-file=-" shell
+  run_as_shell env HOME="$SYNCTHING_HOME" "$SYNCTHING_BIN" serve --no-browser --no-restart --no-upgrade --home="$SYNCTHING_HOME" --log-file=-
   echo "Syncthing exited with status $? at $(date)"
   sleep 5
 done

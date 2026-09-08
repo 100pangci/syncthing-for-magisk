@@ -1,6 +1,10 @@
 #!/system/bin/sh
 # This script will be executed in recovery mode during module installation
 
+MODID=syncthing-for-magisk
+DATA_DIR=/data/local/syncthing-for-magisk
+CONFIG_DIR="$DATA_DIR/config"
+
 ui_print " "
 ui_print "Syncthing for Magisk Installer"
 ui_print " "
@@ -8,20 +12,59 @@ ui_print "- This module will run Syncthing as the 'shell' user."
 ui_print "- It can only access internal storage (/sdcard) and SD cards."
 ui_print " "
 
-MODID=syncthing-for-magisk
-DATA_DIR=/data/adb/syncthing-for-magisk
-CONFIG_DIR="$DATA_DIR/config"
+# --- Architecture detection ---
+# The zip ships one binary per Android ABI. Install the matching one and
+# discard the rest, so service.sh always finds it at bin/syncthing.
+ABI=$(getprop ro.product.cpu.abi)
+ABILIST=$(getprop ro.product.cpu.abilist)
+ARCH=
+for a in "$ABI" ${ABILIST//,/ }; do
+  case "$a" in
+    arm64-v8a) ARCH=arm64-v8a; break ;;
+    armeabi-v7a|armeabi) ARCH=armeabi-v7a; break ;;
+    x86_64) ARCH=x86_64; break ;;
+    x86) ARCH=x86; break ;;
+  esac
+done
+if [ -z "$ARCH" ]; then
+  abort "! Unsupported CPU architecture: $ABI"
+fi
+ui_print "- Detected architecture: $ARCH"
+
+if [ ! -f "$MODPATH/bin/$ARCH/syncthing" ]; then
+  abort "! Syncthing binary missing for architecture $ARCH"
+fi
+mkdir -p "$MODPATH/bin"
+mv -f "$MODPATH/bin/$ARCH/syncthing" "$MODPATH/bin/syncthing" \
+  || abort "! Cannot stage the Syncthing binary"
+rm -rf "$MODPATH/bin/arm64-v8a" "$MODPATH/bin/armeabi-v7a" \
+       "$MODPATH/bin/x86_64" "$MODPATH/bin/x86"
+set_perm "$MODPATH/bin/syncthing" 0 0 0755
+chmod 0711 "$MODPATH" "$MODPATH/bin"
+ui_print "- Syncthing binary installed for $ARCH"
 
 # Syncthing's identity (keys, config, database) lives OUTSIDE the module
 # directory, because Magisk wipes the module directory on every update.
+# /data/local is used so the unprivileged 'shell' user (uid 2000) can reach
+# the data without loosening /data/adb, which is root-only by design.
+chmod 0711 /data/local 2>/dev/null
 mkdir -p "$CONFIG_DIR"
 
-# Migrate config from the old location (inside the module directory)
-OLD_CONFIG_DIR="/data/adb/modules/$MODID/config"
-if [ -f "$OLD_CONFIG_DIR/config.xml" ] && [ ! -f "$CONFIG_DIR/config.xml" ]; then
-  ui_print "- Migrating existing config from module directory..."
-  cp -a "$OLD_CONFIG_DIR/." "$CONFIG_DIR/" 2>/dev/null
-  ui_print "- Migration done."
+# Migrate config from older locations when present:
+# (1) inside the module directory (very old versions)
+# (2) the previous data directory under /data/adb
+if [ ! -f "$CONFIG_DIR/config.xml" ]; then
+  for OLD in \
+    "/data/adb/modules/$MODID/config" \
+    "/data/adb/syncthing-for-magisk/config"
+  do
+    if [ -f "$OLD/config.xml" ]; then
+      ui_print "- Migrating existing config from $OLD..."
+      cp -a "$OLD/." "$CONFIG_DIR/" 2>/dev/null
+      ui_print "- Migration done."
+      break
+    fi
+  done
 fi
 
 # Older versions shipped a config containing a fixed API key and a leftover
@@ -37,20 +80,6 @@ fi
 
 set_perm_recursive "$CONFIG_DIR" 2000 2000 0770 0660
 ui_print "- Config directory: $CONFIG_DIR"
-
-# /data/adb is 0700 root, which would block uid 2000 from traversing it.
-# 0711 allows traversal without listing. service.sh reapplies this each boot.
-chmod 0711 /data/adb /data/adb/modules "$DATA_DIR" 2>/dev/null
-
-# Set permissions for Syncthing binary (kept outside system/ so it does not
-# get mounted into the real /system)
-ui_print "- Setting permissions for Syncthing binary..."
-if [ -f "$MODPATH/bin/syncthing" ]; then
-  set_perm "$MODPATH/bin/syncthing" 0 0 0755
-  chmod 0711 "$MODPATH" "$MODPATH/bin"
-else
-  abort "! Syncthing binary not found at $MODPATH/bin/syncthing"
-fi
 
 ui_print " "
 ui_print "Installation complete!"

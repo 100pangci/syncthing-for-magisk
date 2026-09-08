@@ -2,14 +2,14 @@
 # This script will be executed when you tap the Action button in Magisk Manager
 
 MODDIR=${MODDIR:-${0%/*}}
-DATA_DIR=/data/adb/syncthing-for-magisk
+DATA_DIR=/data/local/syncthing-for-magisk
 SYNCTHING_BIN="$MODDIR/bin/syncthing"
 SYNCTHING_HOME="$DATA_DIR/config"
 LOG_FILE="$SYNCTHING_HOME/syncthing.log"
 STOP_FLAG="$DATA_DIR/syncthing.stop"
 
 # Make sure the 'shell' user can reach the binary and the config directory
-chmod 0711 /data/adb /data/adb/modules 2>/dev/null
+chmod 0711 /data/local 2>/dev/null
 chmod 0711 "$MODDIR" "$MODDIR/bin" "$DATA_DIR" 2>/dev/null
 chmod 0755 "$SYNCTHING_BIN" 2>/dev/null
 mkdir -p "$SYNCTHING_HOME"
@@ -37,7 +37,9 @@ if [ -n "$PIDS" ]; then
     sleep 1
     i=$((i + 1))
   done
-  if [ -n "$(our_pids)" ]; then
+  # Re-read the PIDs: the process may have exited and its PID could be reused
+  PIDS=$(our_pids)
+  if [ -n "$PIDS" ]; then
     kill -9 $PIDS 2>/dev/null
     echo "Syncthing force killed."
   else
@@ -45,32 +47,14 @@ if [ -n "$PIDS" ]; then
   fi
 else
   # --- START SYNCTHING ---
-  echo "Syncthing is not running. Starting it as user 'shell'..."
+  # Syncthing is only ever launched by the boot supervisor in service.sh;
+  # starting it from here too could race with the supervisor and spawn two
+  # instances fighting over the same config/database. Clearing the flag makes
+  # the supervisor pick the process up within a few seconds.
+  echo "Syncthing is not running. Requesting start..."
   rm -f "$STOP_FLAG"
-
-  # First run: generate a fresh unique configuration
-  # Syncthing v2 does not create the old v1 default-folder entry.
-  if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
-    echo "No config found. Generating a fresh configuration..."
-    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
-  fi
-
-  touch "$LOG_FILE"
-  chown 2000:2000 "$LOG_FILE" 2>/dev/null
-  chmod 0660 "$LOG_FILE" 2>/dev/null
-
-  # Use v2's long option names. The service script owns supervision, so
-  # Stop Syncthing's monitor from retrying internally; the boot service owns
-  # retries. Also disable self-upgrade because the binary is module-managed.
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve --no-browser --no-restart --no-upgrade --home='$SYNCTHING_HOME' --log-file='$LOG_FILE'" shell &
-
-  sleep 2
-  PIDS=$(our_pids)
-  if [ -n "$PIDS" ]; then
-    echo "Syncthing started (pid:$PIDS). WebUI: http://127.0.0.1:8384"
-  else
-    echo "Syncthing failed to start. Check $LOG_FILE"
-  fi
+  echo "Start requested. The service supervisor will launch Syncthing within"
+  echo "a few seconds. Progress is logged to: $LOG_FILE"
 fi
 
 echo "Action complete."
