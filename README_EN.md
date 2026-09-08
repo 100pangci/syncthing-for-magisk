@@ -4,8 +4,6 @@
 
 This is a Magisk module that allows Syncthing to run continuously as a service in the background on your Android device. After booting, Syncthing will start automatically, with no need to manually open any app.
 
-The core functionality of this module was written by AI. Please use it at your own discretion. I have personally tested the basic features and they are working correctly.
-
 ## Features
 
 - **Autostart on Boot**: The Syncthing service starts automatically after your device boots up.
@@ -60,10 +58,3 @@ Sync folders need to be added manually in the Web UI (e.g. `/storage/emulated/0/
 ### DNS Note
 
 Many Android devices lack `/etc/resolv.conf`, which prevents statically-linked Go binaries (including Syncthing) from resolving domain names. This module ships a `resolv.conf` (8.8.8.8 / 1.1.1.1) that Magisk mounts systemlessly into `/system/etc` to solve this.
-
-## Credits
-
--   **Author**: ywpc05
--   **Module Core Logic**: Gemini & Claude (AI)
-
----

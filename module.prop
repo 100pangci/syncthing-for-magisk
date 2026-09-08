@@ -2,6 +2,6 @@ id=syncthing-for-magisk
 name=Syncthing for Magisk
 version=v1.29.7
 versionCode=12907
-author=ywpc05&Gemini&Claude
+author=100pangci
 description=Runs Syncthing as a persistent service at boot (as user 'shell'). Accesses /sdcard and external storage.
 minSdk=21
