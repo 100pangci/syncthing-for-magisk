@@ -96,7 +96,7 @@ jobs:
             [arm64-v8a]="ARM aarch64"
             [armeabi-v7a]="ARM, EABI"
             [x86_64]="x86-64"
-            [x86]="Intel i386"
+            [x86]="i386|80386"
           )
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do
             st="${ASSETS[$abi]}"
@@ -110,7 +110,7 @@ jobs:
             chmod 0755 "bin/$abi/syncthing"
             out=$(file "bin/$abi/syncthing")
             echo "$out"
-            echo "$out" | grep -q "${MAGIC[$abi]}" || { echo "Unexpected ${abi} binary"; exit 1; }
+            echo "$out" | grep -qE "${MAGIC[$abi]}" || { echo "Unexpected ${abi} binary"; exit 1; }
             rm -rf "syncthing-${st}-${TAG}" "$tarball"
           done
 
