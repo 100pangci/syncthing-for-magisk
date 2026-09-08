@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # This script will be executed in late_start service mode
 
-MODDIR=${MODDIR:-/data/adb/modules/syncthing-for-magisk} # Fallback for testing
+MODDIR=${MODDIR:-${0%/*}}
 DATA_DIR=/data/adb/syncthing-for-magisk
 SYNCTHING_BIN="$MODDIR/bin/syncthing"
 SYNCTHING_HOME="$DATA_DIR/config"
@@ -49,13 +49,10 @@ rm -f "$STOP_FLAG"
 
 # First run: generate a unique configuration (device ID, certificates and API
 # key) for this installation. Nothing personal is shipped inside the module.
-# Syncthing v1 accepts --no-default-folder, v2 removed that flag.
+# Syncthing v2's generate subcommand creates the identity and initial config.
 if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
   echo "No config found. Generating a fresh configuration as user 'shell'..."
-  if ! su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell; then
-    echo "Retrying generate without v1-only flags (Syncthing v2)..."
-    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
-  fi
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
   echo "Config generation exit status: $?"
 fi
 
@@ -85,9 +82,11 @@ while :; do
     continue
   fi
   echo "Starting Syncthing as user 'shell' at $(date)"
-  # 'serve' works on both v1 (kong CLI) and v2; -logfile=- sends Syncthing's
-  # own log to stdout, already redirected above
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve -no-browser -home='$SYNCTHING_HOME' -logfile=-" shell
+  # Use v2's long option names. --log-file=- sends Syncthing's own log to
+  # stdout, which is already redirected to the module log above. The service
+  # supervisor owns retries, so --no-restart makes Syncthing's monitor return
+  # after a child failure instead of retrying internally.
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve --no-browser --no-restart --no-upgrade --home='$SYNCTHING_HOME' --log-file=-" shell
   echo "Syncthing exited with status $? at $(date)"
   sleep 5
 done

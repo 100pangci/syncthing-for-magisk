@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # This script will be executed when you tap the Action button in Magisk Manager
 
-MODDIR=${MODDIR:-/data/adb/modules/syncthing-for-magisk}
+MODDIR=${MODDIR:-${0%/*}}
 DATA_DIR=/data/adb/syncthing-for-magisk
 SYNCTHING_BIN="$MODDIR/bin/syncthing"
 SYNCTHING_HOME="$DATA_DIR/config"
@@ -49,21 +49,20 @@ else
   rm -f "$STOP_FLAG"
 
   # First run: generate a fresh unique configuration
-  # Syncthing v1 accepts --no-default-folder, v2 removed that flag
+  # Syncthing v2 does not create the old v1 default-folder entry.
   if [ ! -f "$SYNCTHING_HOME/config.xml" ]; then
     echo "No config found. Generating a fresh configuration..."
-    if ! su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME' --no-default-folder" shell; then
-      echo "Retrying generate without v1-only flags (Syncthing v2)..."
-      su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
-    fi
+    su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' generate --home='$SYNCTHING_HOME'" shell
   fi
 
   touch "$LOG_FILE"
   chown 2000:2000 "$LOG_FILE" 2>/dev/null
   chmod 0660 "$LOG_FILE" 2>/dev/null
 
-  # 'serve' works on both v1 (kong CLI) and v2
-  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve -no-browser -home='$SYNCTHING_HOME' -logfile='$LOG_FILE'" shell &
+  # Use v2's long option names. The service script owns supervision, so
+  # Stop Syncthing's monitor from retrying internally; the boot service owns
+  # retries. Also disable self-upgrade because the binary is module-managed.
+  su -c "exec env HOME='$SYNCTHING_HOME' '$SYNCTHING_BIN' serve --no-browser --no-restart --no-upgrade --home='$SYNCTHING_HOME' --log-file='$LOG_FILE'" shell &
 
   sleep 2
   PIDS=$(our_pids)
